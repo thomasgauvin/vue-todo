@@ -10,8 +10,8 @@
 
     <div class="todo-item" v-for="(todo, index) in todos" :key="index">
       <div class="todo-content">
-        <input type="checkbox" v-model="todo.completed">
-        <label :class="{ 'completed': todo.completed }">{{ todo.label }}</label>
+        <input type="checkbox" v-model="todo.complete">
+        <label :class="{ 'completed': todo.complete }">{{ todo.label }}</label>
       </div>
       <button @click="removeTodo(index)" class="delete-button">X</button>
     </div>
