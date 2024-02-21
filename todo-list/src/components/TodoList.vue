@@ -10,7 +10,7 @@
 
     <div class="todo-item" v-for="(todo, index) in todos" :key="index">
       <div class="todo-content">
-        <input type="checkbox" v-model="todo.complete">
+        <input type="checkbox" v-model="todo.complete" @change="toggleCompleted(index)">
         <label :class="{ 'completed': todo.complete }">{{ todo.label }}</label>
       </div>
       <button @click="removeTodo(index)" class="delete-button">X</button>
@@ -28,21 +28,161 @@ export default {
       currentUser: null
     };
   },
-  created() {},
+  async created() {
+    await this.getCurrentUser();
+
+    const todos = await this.list()
+    this.todos = todos;
+  },
   methods: {
+    async getCurrentUser() {
+      try {
+        const response = await fetch('/.auth/me');
+        if (response.ok) {
+          const data = await response.json();
+          this.currentUser = data.clientPrincipal;
+        } else {
+          console.error('Failed to fetch user information');
+        }
+      } catch (error) {
+        console.error('Error fetching user information:', error);
+      }
+    },
     async addTodo() {
       if (this.newTodo.trim() !== '') {
         const todo = {
+          id: Math.random().toString(36).substr(2, 9),
+          userId: Math.random().toString(36).substr(2, 9),
           label: this.newTodo,
-          completed: false
+          complete: false
         };
-        this.todos.push(todo);
+        // this.todos.push(todo);
+        // this.newTodo = '';
+
+        const createdTodo = await this.create(todo)
+        this.todos.push(createdTodo);
         this.newTodo = '';
       }
     },
-    removeTodo(index) {
+    async removeTodo(index) {
+      // this.todos.splice(index, 1);
+
+      const todo = this.todos[index];
       this.todos.splice(index, 1);
+      await this.delete(todo.id);
     },
+    async toggleCompleted(index){
+      const todo = this.todos[index];
+      console.log(todo);
+      await this.update(todo.id, todo);
+    },
+    async list() {
+      const query = `
+        query GetTodoItems {
+          todoItems {
+            items {
+              id
+              userId
+              label
+              complete
+            }
+          }
+        }`;
+          
+      const endpoint = "/data-api/graphql";
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: query })
+      });
+      
+      const result = await response.json();
+      return result.data.todoItems.items;
+    },
+    async update(id, newData) {
+      const gql = `
+        mutation UpdateTodoItem($id: ID!, $_partitionKeyValue: String!, $item: UpdateTodoItemsInput!) {
+          updateTodoItems(id: $id, _partitionKeyValue: $_partitionKeyValue, item: $item) {
+            id
+            userId
+            label
+            complete
+          }
+        }`;
+
+      const query = {
+        query: gql,
+        variables: {
+          id: id,
+          _partitionKeyValue: id,
+          item: newData
+        }
+      };
+
+      const endpoint = "/data-api/graphql";
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(query)
+      });
+
+      const result = await response.json();
+      return result.data.updateTodoItems;
+    },
+    async create(data) {
+      const gql = `
+        mutation CreateTodoItem($item: CreateTodoItemsInput!) {
+          createTodoItems(item: $item) {
+            id
+            userId
+            label
+            complete
+          }
+        }`;
+
+      const query = {
+        query: gql,
+        variables: {
+          item: data
+        }
+      };
+
+      const endpoint = "/data-api/graphql";
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(query)
+      });
+
+      const result = await response.json();
+      return result.data.createTodoItems;
+    },
+    async delete(id) {
+      const gql = `
+        mutation DeleteTodoItem($id: ID!, $_partitionKeyValue: String!) {
+          deleteTodoItems(id: $id, _partitionKeyValue: $_partitionKeyValue) {
+            id
+          }
+        }`;
+
+      const query = {
+        query: gql,
+        variables: {
+          id: id,
+          _partitionKeyValue: id
+        }
+      };
+
+      const endpoint = "/data-api/graphql";
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(query)
+      });
+
+      const result = await response.json();
+      return result.data.deleteTodoItems;
+    }
   }
 };
 </script>
